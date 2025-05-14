@@ -1,0 +1,96 @@
+import numpy as np 
+import matplotlib.pyplot as plt 
+ 
+# --- 參數設定 --- 
+fitness_mode = 'linear'  # 'power_law' or 'linear' 
+reproduction_mode = 'TS'    # 'RWS' or 'TS' 
+ 
+# --- 目標函數設定 --- 
+x_vals = np.arange(-10, 10.1, 0.1) 
+y_vals = -15 * (np.sin(2 * x_vals))**2 - (x_vals - 2)**2 + 160 
+max_idx = np.argmax(y_vals) 
+max_x = x_vals[max_idx] 
+fit_terminate_condition = y_vals[max_idx] 
+ 
+if fitness_mode == 'power_law': 
+    fit_terminate_condition **= 5 
+else: 
+    fit_terminate_condition = 100000 * fit_terminate_condition + 5 
+ 
+# --- 初始族群 --- 
+population = 10 
+x_all = np.random.randint(-100, 101, population) * 0.1 
+ 
+# --- 主遺傳演算法 --- 
+max_fitness = [] 
+max_x_estimated = 0 
+ 
+for generation in range(1, 101): 
+    # 計算適應度 
+    fitness = -15 * (np.sin(2 * x_all))**2 - (x_all - 2)**2 + 160 
+    if fitness_mode == 'power_law': 
+        fitness = fitness**5 
+    else: 
+        fitness = 100000 * fitness + 5 
+ 
+    max_fitness.append(np.max(fitness)) 
+ 
+    if np.max(fitness) >= fit_terminate_condition: 
+        max_x_estimated = x_all[np.argmax(fitness)] 
+        break 
+ 
+    # reproduction 
+    if reproduction_mode == 'RWS': 
+        probs = fitness / np.sum(fitness) 
+        selected_indices = np.searchsorted(np.cumsum(probs), 
+np.random.rand(population)) 
+    else:  # TS 
+        selected_indices = [] 
+        for _ in range(population): 
+            candidates = np.random.choice(population, 2, 
+replace=False) 
+            best = candidates[np.argmax(fitness[candidates])] 
+            selected_indices.append(best) 
+    x_selected = x_all[selected_indices] 
+ 
+    # crossover 
+    x_crossovered = np.copy(x_selected) 
+    crossover_indices = 
+np.random.permutation(population)[:8].reshape(4, 2) 
+    for idx1, idx2 in crossover_indices: 
+        valid = False 
+        while not valid: 
+            temp1, temp2 = x_selected[idx1], x_selected[idx2] 
+            sigma = np.random.randint(-10, 11) * 0.1 
+            new1 = temp1 + sigma * (temp1 - temp2) 
+            new2 = temp2 - sigma * (temp1 - temp2) 
+            if abs(new1) <= 10 and abs(new2) <= 10: 
+                x_crossovered[idx1] = new1 
+                x_crossovered[idx2] = new2 
+                valid = True 
+ 
+    # mutation 
+    x_mutationed = np.copy(x_crossovered) 
+    s = np.random.randint(0, 11) * 0.1 
+    noise = np.random.randint(-10, 11, population) * 0.1 
+    x_mutationed += s * noise 
+ 
+    while np.any(x_mutationed > 10) or np.any(x_mutationed < -10): 
+        x_mutationed = np.copy(x_crossovered) 
+        s = np.random.randint(0, 11) * 0.1 
+        noise = np.random.randint(-10, 11, population) * 0.1 
+        x_mutationed += s * noise 
+ 
+    # new generation 
+    x_all = np.copy(x_mutationed) 
+ 
+# --- 結果繪圖 --- 
+plt.figure() 
+plt.plot(range(1, generation + 1), max_fitness) 
+if max_x_estimated == 0: 
+    plt.title(f'RGA generation: {generation}') 
+else: 
+    plt.title(f'RGA generation: {generation}, 
+x={max_x_estimated:.4f}') 
+plt.grid(True) 
+plt.show() 
