@@ -1,0 +1,153 @@
+import numpy as np 
+import matplotlib.pyplot as plt 
+ 
+# === 參數設定 === 
+fitness_mode = 'linear'  # 'power_law' 或 'linear' 
+reproduction_mode = 'TS'   # 'RWS' 或 'TS' 
+crossover_mode = 'mask'  # 'one-point', 'two-point', 'mask' 
+mutation_mode = 'uniform'       # 'bit', 'string', 'uniform' 
+ 
+# === 評估函數 === 
+x = np.arange(-10, 10.1, 0.1) 
+y = -15 * (np.sin(2 * x))**2 - (x - 2)**2 + 160 
+max_y_index = np.argmax(y) 
+max_x = x[max_y_index] 
+ 
+# === 初始族群 === 
+population = 10 
+bit_length = 10 
+x_bin_TO_dec = np.array([8, 4, 2, 1, 0.5, 0.25, 0.125, 0.0625, 
+0.03125]) 
+ 
+def generate_individual(): 
+    while True: 
+        individual = np.random.randint(0, 2, bit_length) 
+        val = np.sum(individual[1:] * x_bin_TO_dec) 
+        if val <= 10: 
+            if individual[0] == 1: 
+                val *= -1 
+            return individual, val 
+ 
+x_bin = [] 
+x_dec = [] 
+for _ in range(population): 
+    ind, val = generate_individual() 
+    x_bin.append(ind) 
+    x_dec.append(val) 
+ 
+x_bin = np.array(x_bin) 
+x_dec = np.array(x_dec) 
+ 
+# === 終止條件 === 
+fit_terminate_condition = -15 * (np.sin(2 * max_x))**2 - (max_x - 
+2)**2 + 160 
+if fitness_mode == 'power_law': 
+    fit_terminate_condition = fit_terminate_condition ** 5 
+elif fitness_mode == 'linear': 
+    fit_terminate_condition = 100000 * fit_terminate_condition + 5 
+ 
+# === 遺傳演算法主迴圈 === 
+max_fitness = [] 
+max_x_estimated = 0 
+ 
+for generation in range(1, 1001): 
+    fitness = -15 * (np.sin(2 * x_dec))**2 - (x_dec - 2)**2 + 160 
+    if fitness_mode == 'power_law': 
+        fitness = fitness ** 5 
+    elif fitness_mode == 'linear': 
+        fitness = 100000 * fitness + 5 
+ 
+    max_fitness.append(np.max(fitness)) 
+    if np.max(fitness) >= fit_terminate_condition: 
+        max_x_estimated = x_dec[np.argmax(fitness)] 
+        break 
+ 
+    # === 選擇 === 
+    if reproduction_mode == 'RWS': 
+        cumulative = np.cumsum(fitness) 
+        total = cumulative[-1] 
+        selected = [] 
+        for _ in range(population): 
+            pick = np.random.uniform(0, total) 
+            idx = np.searchsorted(cumulative, pick) 
+            selected.append(x_bin[idx]) 
+    elif reproduction_mode == 'TS': 
+        selected = [] 
+        for _ in range(population): 
+            i1, i2 = np.random.choice(population, 2, 
+replace=False) 
+            idx = i1 if fitness[i1] > fitness[i2] else i2 
+            selected.append(x_bin[idx]) 
+    selected = np.array(selected) 
+ 
+    # === 交配 === 
+    crossovered = selected.copy() 
+    pairs = np.random.permutation(population)[:8] 
+    for i in range(0, 8, 2): 
+        p1, p2 = pairs[i], pairs[i+1] 
+        for _ in range(10):  # 最多重試10次確保合法 
+            child1, child2 = crossovered[p1].copy(), 
+crossovered[p2].copy() 
+            if crossover_mode == 'one-point': 
+                pt = np.random.randint(1, bit_length) 
+                child1[pt:], child2[pt:] = child2[pt:], child1[pt:] 
+            elif crossover_mode == 'two-point': 
+                pt1, pt2 = sorted(np.random.choice(range(1, 
+bit_length), 2, replace=False)) 
+                child1[pt1:pt2], child2[pt1:pt2] = child2[pt1:pt2], 
+child1[pt1:pt2] 
+            elif crossover_mode == 'mask': 
+                mask = np.random.randint(0, 2, bit_length) 
+                child1[mask == 1], child2[mask == 1] = child2[mask 
+== 1], child1[mask == 1] 
+            a = np.sum(child1[1:] * x_bin_TO_dec) 
+            b = np.sum(child2[1:] * x_bin_TO_dec) 
+            if a <= 10 and b <= 10: 
+                crossovered[p1], crossovered[p2] = child1, child2 
+                break 
+ 
+    # === 突變 === 
+    mutationed = crossovered.copy() 
+    if mutation_mode == 'bit': 
+        m_ind, m_bit = np.random.randint(0, population), 
+np.random.randint(0, bit_length) 
+        mutationed[m_ind, m_bit] ^= 1 
+        val = np.sum(mutationed[m_ind, 1:] * x_bin_TO_dec) 
+        if val > 10: 
+            mutationed = crossovered.copy() 
+    elif mutation_mode == 'string' and generation % 10 == 0: 
+        m_ind = np.random.randint(0, population) 
+        mutationed[m_ind] ^= 1 
+        val = np.sum(mutationed[m_ind, 1:] * x_bin_TO_dec) 
+        if val > 10: 
+            mutationed = crossovered.copy() 
+    elif mutation_mode == 'uniform' and generation % 2 == 1: 
+        m_ind = np.random.randint(0, population) 
+        pos = np.random.choice(bit_length, 2, replace=False) 
+        mutationed[m_ind, pos] ^= 1 
+        val = np.sum(mutationed[m_ind, 1:] * x_bin_TO_dec) 
+        if val > 10: 
+            mutationed = crossovered.copy() 
+ 
+    # === 更新新族群 === 
+    x_bin = mutationed 
+    x_dec = np.zeros(population) 
+    for i in range(population): 
+        x_dec[i] = np.sum(x_bin[i, 1:] * x_bin_TO_dec) 
+        if x_bin[i, 0] == 1: 
+            x_dec[i] *= -1 
+ 
+# === 繪圖 === 
+fig, ax = plt.subplots() 
+ax.plot(range(1, len(max_fitness)+1), np.array(max_fitness) / 
+1e10) 
+ 
+ax.set_title(f'BGA generation: {generation}, 
+x={max_x_estimated:.3f}' if max_x_estimated != 0 else f'BGA 
+generation: {generation}') 
+ax.grid(True) 
+ 
+# 用 axes 座標 (0.01, 0.99) 貼齊左上角 
+ax.text(0, 1.04, '×1e10', transform=ax.transAxes, 
+ha='left', va='top', fontsize=10) 
+plt.show()
